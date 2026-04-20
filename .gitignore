@@ -1,0 +1,46 @@
+# ====================================================
+# .gitignore - Accounting & Invoice Agent
+# ====================================================
+
+# Environment & Secrets
+.env
+*.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Vector Store (dữ liệu local, không commit)
+data/chroma_db/
+
+# Chainlit
+.chainlit/
+chainlit.md
+
+# PDF uploads thật (không commit) - chỉ commit synthetic data
+# data/sample_invoices/*.pdf  <- bỏ comment vì synthetic data được phép commit
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Evaluation output (kết quả chạy local)
+eval/results/
+
+# Fonts
+fonts/

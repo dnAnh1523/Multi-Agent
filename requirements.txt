@@ -1,0 +1,44 @@
+# ====================================================
+# Accounting & Invoice Agent - Requirements
+# Python 3.12.9 | Last verified: 2026-04-17
+# ====================================================
+
+# --- Core LLM & Agent Framework ---
+langgraph==1.1.8
+langchain==1.2.15
+langchain-groq==1.1.2
+langchain-ollama==1.1.0
+langchain-core>=0.3.0                # pulled in by langchain, explicit for safety
+
+# --- RAG & Vector Store ---
+langchain-chroma==1.1.0
+chromadb==1.5.8
+
+# --- Embedding Model (local, no API key needed) ---
+langchain-huggingface==1.2.2
+sentence-transformers==5.4.1
+
+# --- PDF Processing ---
+pymupdf==1.27.2.2      
+pymupdf4llm==1.27.2.2              # import as: import fitz
+
+# --- Tools ---
+tavily-python==0.7.23                # Web Search (cần TAVILY_API_KEY)
+
+# --- UI ---
+chainlit==2.11.0
+
+# --- Evaluation (Sprint 4) ---
+# Cài riêng khi cần, tránh conflict với các package trên
+# ragas==0.4.3
+
+# --- Utilities ---
+python-dotenv==1.2.2                 # load .env file
+unicodedata2==17.0.1                 # chuẩn hóa encoding tiếng Việt
+fpdf2==2.8.7                     # tạo PDF (hóa đơn)
+
+
+# --- Optional: For development and testing ---
+# pytest==7.4.0   
+# pytest-cov==3.0.0
+# ====================================================
