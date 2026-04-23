@@ -43,10 +43,11 @@ def get_vector_store(embedding: HuggingFaceEmbeddings) -> Chroma:
         return Chroma(embedding_function=embedding, persist_directory=CHROMA_PERSIST_DIR, collection_name="accounting_docs")
 
 
-def add_documents(
-    vector_store: Chroma,
-    documents: list[Document],
-) -> int:
+def make_doc_id(source: str, page: int) -> str:
+    return f"{source}::page_{page}"
+
+
+def add_documents(vector_store: Chroma, documents: list[Document]) -> int:
     """
     Thêm documents vào vector store.
     
@@ -61,7 +62,9 @@ def add_documents(
         print("⚠️ Không có documents để thêm vào vector store")
         return 0
 
-    vector_store.add_documents(documents)
+    ids = [make_doc_id(doc.metadata["source"], doc.metadata["page"]) for doc in documents]
+
+    vector_store.add_documents(documents, ids=ids)
     print(f"✅ Đã index {len(documents)} documents vào vector store")
     return len(documents)
 
