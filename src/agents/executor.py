@@ -87,8 +87,9 @@ def make_executor(vector_store: Chroma):
             return {"messages": [AIMessage(content=result)], "tool_output": result}
 
         elif intent == "email_draft":
-            # TODO: import và gọi email_draft_tool(last_message, vector_store)
-            pass
+            from src.tools.email_draft import email_draft_tool
+            result = email_draft_tool(last_message, vector_store)
+            return {"messages": [AIMessage(content=result)], "tool_output": result}
 
         elif intent == "web_search":
             # TODO: import và gọi web_search_tool(last_message)

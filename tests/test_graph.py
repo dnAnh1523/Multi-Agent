@@ -39,3 +39,8 @@ print(result["messages"][-1].content)
 print("\n=== Test 4: Invoice Summary ===")
 result = chat(graph, "Tóm tắt chi tiết hóa đơn số 0000001")
 print(result["messages"][-1].content)
+
+# Test 5: email_draft
+print("\n=== Test 5: Email Draft ===")
+result = chat(graph, "Soạn email nhắc nợ cho hóa đơn số 0000001")
+print(result["messages"][-1].content)
