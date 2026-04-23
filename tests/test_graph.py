@@ -45,6 +45,12 @@ graph = build_graph(vs)
 # result = chat(graph, "Soạn email nhắc nợ cho hóa đơn số 0000001")
 # print(result["messages"][-1].content)
 
-print("\n=== Test 6: Web Search ===")
-result = chat(graph, "Thuế suất GTGT hiện hành tại Việt Nam năm 2026 là bao nhiêu?")
+# # Test 6: web_search
+# print("\n=== Test 6: Web Search ===")
+# result = chat(graph, "Thuế suất GTGT hiện hành tại Việt Nam năm 2026 là bao nhiêu?")
+# print(result["messages"][-1].content)
+
+# Test 7: compare
+print("\n=== Test 7: Compare ===")
+result = chat(graph, "So sánh hóa đơn số 0000001 và hóa đơn số 0000002")
 print(result["messages"][-1].content)

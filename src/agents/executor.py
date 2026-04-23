@@ -96,7 +96,9 @@ def make_executor(vector_store: Chroma):
 
         elif intent == "compare":
             # TODO: import và gọi compare_tool(last_message, vector_store)
-            pass
+            from src.tools.compare import compare_tool
+            result = compare_tool(last_message, vector_store)
+            return {"messages": [AIMessage(content=result)], "tool_output": result}
 
         # Fallback nếu intent không khớp case nào
         answer = "Xin lỗi, tôi không thể xử lý yêu cầu này."
