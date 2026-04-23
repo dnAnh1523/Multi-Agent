@@ -47,9 +47,6 @@ def make_executor(vector_store: Chroma):
             }
 
         elif intent == "general":
-            # TODO: gọi LLM trực tiếp không cần context
-            # llm.invoke([SystemMessage(...), HumanMessage(content=last_message)])
-            # Trả về {"messages": [AIMessage(content=response.content)]}
             llm = get_llm()
             response = llm.invoke([
                 SystemMessage(content=EXECUTOR_SYSTEM_PROMPT),
@@ -76,7 +73,7 @@ def make_executor(vector_store: Chroma):
     
             return {
                 "messages": [AIMessage(content=response.content)],
-                "context": [context],   # list[str] không phải str
+                "context": [context],
                 "citations": citations,
             }
 
@@ -93,7 +90,9 @@ def make_executor(vector_store: Chroma):
 
         elif intent == "web_search":
             # TODO: import và gọi web_search_tool(last_message)
-            pass
+            from src.tools.web_search import web_search_tool
+            result = web_search_tool(last_message)
+            return {"messages": [AIMessage(content=result)], "tool_output": result}
 
         elif intent == "compare":
             # TODO: import và gọi compare_tool(last_message, vector_store)

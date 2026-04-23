@@ -24,6 +24,7 @@ pymupdf4llm==1.27.2.2              # import as: import fitz
 
 # --- Tools ---
 tavily-python==0.7.23                # Web Search (cần TAVILY_API_KEY)
+langchain-tavily==0.2.18
 
 # --- UI ---
 chainlit==2.11.0

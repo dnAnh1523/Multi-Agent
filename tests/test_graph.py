@@ -19,28 +19,32 @@ vs = build_vector_store(docs)
 print("\n🔧 Building graph...")
 graph = build_graph(vs)
 
-# Test 1: general intent
-print("\n=== Test 1: General ===")
-result = chat(graph, "Xin chào, bạn có thể giúp gì cho tôi?")
-print(result["messages"][-1].content)
+# # Test 1: general intent
+# print("\n=== Test 1: General ===")
+# result = chat(graph, "Xin chào, bạn có thể giúp gì cho tôi?")
+# print(result["messages"][-1].content)
 
-# Test 2: retrieve intent
-print("\n=== Test 2: Retrieve ===")
-result = chat(graph, "Hóa đơn số 0000001 có tổng tiền thanh toán là bao nhiêu?")
-print(result["messages"][-1].content)
-print("Citations:", result.get("citations"))
+# # Test 2: retrieve intent
+# print("\n=== Test 2: Retrieve ===")
+# result = chat(graph, "Hóa đơn số 0000001 có tổng tiền thanh toán là bao nhiêu?")
+# print(result["messages"][-1].content)
+# print("Citations:", result.get("citations"))
 
-# Test 3: follow-up (test memory)
-print("\n=== Test 3: Follow-up (memory) ===")
-result = chat(graph, "Thuế GTGT của hóa đơn đó là bao nhiêu phần trăm?")
-print(result["messages"][-1].content)
+# # Test 3: follow-up (test memory)
+# print("\n=== Test 3: Follow-up (memory) ===")
+# result = chat(graph, "Thuế GTGT của hóa đơn đó là bao nhiêu phần trăm?")
+# print(result["messages"][-1].content)
 
-# Test 4: invoice_summary
-print("\n=== Test 4: Invoice Summary ===")
-result = chat(graph, "Tóm tắt chi tiết hóa đơn số 0000001")
-print(result["messages"][-1].content)
+# # Test 4: invoice_summary
+# print("\n=== Test 4: Invoice Summary ===")
+# result = chat(graph, "Tóm tắt chi tiết hóa đơn số 0000001")
+# print(result["messages"][-1].content)
 
-# Test 5: email_draft
-print("\n=== Test 5: Email Draft ===")
-result = chat(graph, "Soạn email nhắc nợ cho hóa đơn số 0000001")
+# # Test 5: email_draft
+# print("\n=== Test 5: Email Draft ===")
+# result = chat(graph, "Soạn email nhắc nợ cho hóa đơn số 0000001")
+# print(result["messages"][-1].content)
+
+print("\n=== Test 6: Web Search ===")
+result = chat(graph, "Thuế suất GTGT hiện hành tại Việt Nam năm 2026 là bao nhiêu?")
 print(result["messages"][-1].content)
