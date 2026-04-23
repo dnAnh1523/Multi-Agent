@@ -82,10 +82,9 @@ def make_executor(vector_store: Chroma):
 
 
         elif intent == "invoice_summary":
-            # TODO: import và gọi invoice_summary_tool(last_message, vector_store)
-            # Tool này sẽ implement ở src/tools/invoice_summary.py
-            # Trả về {"messages": [...], "tool_output": result}
-            pass
+            from src.tools.invoice_summary import invoice_summary_tool
+            result = invoice_summary_tool(last_message, vector_store)
+            return {"messages": [AIMessage(content=result)], "tool_output": result}
 
         elif intent == "email_draft":
             # TODO: import và gọi email_draft_tool(last_message, vector_store)

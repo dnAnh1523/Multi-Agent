@@ -34,3 +34,8 @@ print("Citations:", result.get("citations"))
 print("\n=== Test 3: Follow-up (memory) ===")
 result = chat(graph, "Thuế GTGT của hóa đơn đó là bao nhiêu phần trăm?")
 print(result["messages"][-1].content)
+
+# Test 4: invoice_summary
+print("\n=== Test 4: Invoice Summary ===")
+result = chat(graph, "Tóm tắt chi tiết hóa đơn số 0000001")
+print(result["messages"][-1].content)
