@@ -6,7 +6,7 @@ Thực thi action dựa trên intent từ Planner.
 from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
 from langchain_chroma import Chroma
 from src.agents.planner import get_llm
-from src.rag.retriever import retrieve, format_context, get_citations
+from src.rag.retriever import retrieve, format_context
 from src.config import FAITHFULNESS_THRESHOLD
 
 EXECUTOR_SYSTEM_PROMPT = """Bạn là trợ lý kế toán thông minh cho doanh nghiệp Việt Nam.
@@ -56,49 +56,65 @@ def make_executor(vector_store: Chroma):
 
         elif intent == "retrieve":
             docs = retrieve(vector_store, last_message, k=5)
-            context = format_context(docs)
-            citations = get_citations(docs)
+            context, citation_map = format_context(docs)
 
-            # Gộp context vào 1 message duy nhất, có hướng dẫn trích dẫn
-            prompt = f"""Dựa vào các tài liệu sau, trả lời câu hỏi bằng tiếng Việt.
-            Trích dẫn số thứ tự [1], [2]... khi dùng thông tin từ tài liệu đó.
-            Nếu không tìm thấy thông tin, hãy nói rõ thay vì đoán.
-
-            {context}
-
-            Câu hỏi: {last_message}"""
+            # Tạo prompt riêng — không bị ảnh hưởng bởi indent
+            prompt_lines = [
+                "Dựa vào các tài liệu sau, trả lời câu hỏi bằng tiếng Việt.",
+                "Khi trích dẫn, dùng đúng ID trong ngoặc vuông như [rag_hoadon_001_p1].",
+                "Nếu một câu dùng nhiều nguồn, liệt kê tất cả IDs trong cùng 1 ngoặc, phân cách bằng dấu phẩy.",
+                "Ví dụ: [rag_hoadon_001_p1, rag_hoadon_002_p1]",
+                "KHÔNG tạo ID mới ngoài danh sách trên.",
+                "Nếu không tìm thấy thông tin, hãy nói rõ thay vì đoán.",
+                "",
+                context,
+                "",
+                f"Câu hỏi: {last_message}",
+            ]
+            prompt = "\n".join(prompt_lines)
 
             llm = get_llm()
             response = llm.invoke([HumanMessage(content=prompt)])
-    
+
             return {
                 "messages": [AIMessage(content=response.content)],
                 "context": [context],
-                "citations": citations,
+                "citation_map": citation_map,
             }
 
 
         elif intent == "invoice_summary":
             from src.tools.invoice_summary import invoice_summary_tool
             result = invoice_summary_tool(last_message, vector_store)
-            return {"messages": [AIMessage(content=result)], "tool_output": result}
+            return {
+                "messages": [AIMessage(content=result)], 
+                "tool_output": result
+            }
 
         elif intent == "email_draft":
             from src.tools.email_draft import email_draft_tool
             result = email_draft_tool(last_message, vector_store)
-            return {"messages": [AIMessage(content=result)], "tool_output": result}
+            return {
+                "messages": [AIMessage(content=result)], 
+                "tool_output": result
+            }
 
         elif intent == "web_search":
-            # TODO: import và gọi web_search_tool(last_message)
             from src.tools.web_search import web_search_tool
-            result = web_search_tool(last_message)
-            return {"messages": [AIMessage(content=result)], "tool_output": result}
+            answer, citation_map = web_search_tool(last_message)
+            return {
+                "messages": [AIMessage(content=answer)],
+                "tool_output": answer,
+                "citation_map": citation_map,
+            }
 
         elif intent == "compare":
-            # TODO: import và gọi compare_tool(last_message, vector_store)
             from src.tools.compare import compare_tool
             result = compare_tool(last_message, vector_store)
-            return {"messages": [AIMessage(content=result)], "tool_output": result}
+            return {
+                "messages": [AIMessage(content=result)],
+                "tool_output": result
+            }
 
         # Fallback nếu intent không khớp case nào
         answer = "Xin lỗi, tôi không thể xử lý yêu cầu này."

@@ -4,7 +4,7 @@ email_draft.py - Tool soạn email chuyên nghiệp liên quan đến hóa đơn
 
 from langchain_chroma import Chroma
 from langchain_core.messages import HumanMessage
-from src.rag.retriever import retrieve, format_context
+from src.rag.retriever import retrieve, format_context, extract_metadata_filter
 from src.agents.planner import get_llm
 
 EMAIL_DRAFT_PROMPT = """Bạn là chuyên gia kế toán Việt Nam, soạn email chuyên nghiệp.
@@ -40,7 +40,11 @@ def email_draft_tool(query: str, vector_store: Chroma) -> str:
     Returns:
         str: email draft hoàn chỉnh
     """
-    docs = retrieve(vector_store, query, k=3)
+    # 1. Trích xuất filter từ query
+    my_filter = extract_metadata_filter(query)
+
+    # 2. Truyền filter vào hàm retrieve (đã được bạn nâng cấp ở phần trước)
+    docs = retrieve(vector_store, query, k=3, metadata_filter=my_filter)
 
     if not docs:
         return "❌ Không tìm thấy thông tin hóa đơn để soạn email."

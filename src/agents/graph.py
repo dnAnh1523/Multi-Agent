@@ -23,7 +23,7 @@ class AgentState(TypedDict):
     messages:    Annotated[list[BaseMessage], add_messages]
     intent:      str
     context:     list[str]
-    citations:   list[dict]
+    citation_map: dict
     tool_output: str
     steps:       int
 

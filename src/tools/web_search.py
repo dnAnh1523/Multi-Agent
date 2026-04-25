@@ -7,22 +7,36 @@ from langchain_tavily import TavilySearch
 from langchain_core.messages import HumanMessage
 from src.agents.planner import get_llm
 from src.config import TAVILY_API_KEY
+from urllib.parse import urlparse
+import re
 
+def make_web_id(url: str, index: int) -> str:
+    """
+    Tạo descriptive raw ID từ domain + số thứ tự.
+    Ví dụ: "https://thuvienphapluat.vn/..." + 1 → "web_thuvienphapluat_vn_01"
+    """
+    domain = urlparse(url).netloc.replace("www.", "")
+    # Normalize domain: thay dấu chấm bằng underscore
+    domain_id = re.sub(r'[^a-z0-9]', '_', domain.lower())
+    domain_id = re.sub(r'_+', '_', domain_id).strip('_')
+    return f"web_{domain_id}_{index:02d}"
 
-def web_search_tool(query: str) -> str:
+DOMAIN_MAP = {
+    "thuvienphapluat.vn": "Thư viện Pháp luật",
+    "gdt.gov.vn": "Tổng cục Thuế",
+    "mof.gov.vn": "Bộ Tài chính",
+}
+
+def web_search_tool(query: str) -> tuple[str, dict]:
     """
     Tìm kiếm thông tin luật thuế, chính sách kế toán mới nhất.
 
-    Args:
-        query: câu hỏi của user về luật thuế/chính sách
-
     Returns:
-        str: tổng hợp thông tin từ web kèm nguồn tham khảo
+        tuple: (answer_str, citation_map)
     """
     if not TAVILY_API_KEY:
-        return "❌ Chưa cấu hình TAVILY_API_KEY. Vui lòng thêm vào file .env"
+        return "❌ Chưa cấu hình TAVILY_API_KEY.", {}
 
-    # include_domains giúp ưu tiên nguồn đáng tin cậy về thuế VN
     search = TavilySearch(
         max_results=5,
         topic="general",
@@ -31,24 +45,43 @@ def web_search_tool(query: str) -> str:
     )
 
     raw_results = search.invoke({"query": query})
-
-    # Format kết quả thành string có nguồn rõ ràng
     results = raw_results.get("results", [])
-    if not results:
-        return "❌ Không tìm thấy thông tin liên quan trên web."
 
-    # Format từng kết quả: tiêu đề + URL + nội dung
+    if not results:
+        return "❌ Không tìm thấy thông tin liên quan trên web.", {}
+
+    # --- THAY ĐỔI: dùng raw_id thay vì [1],[2] ---
+    citation_map = {}
     formatted = []
+
     for i, r in enumerate(results, 1):
         title = r.get("title", "Không có tiêu đề")
         url = r.get("url", "")
-        content = r.get("content", "")[:500]  # giới hạn 500 ký tự mỗi kết quả
-        formatted.append(f"[{i}] {title}\nNguồn: {url}\n{content}")
+        content = r.get("content", "")[:500]
+
+        raw_id = make_web_id(url, i)
+        domain = urlparse(url).netloc.replace("www.", "")
+        org = DOMAIN_MAP.get(domain, domain)
+
+        # Format context với raw_id làm label
+        formatted.append(f"[{raw_id}] {title}\nNguồn: {url}\n{content}")
+
+        # Build citation_map
+        citation_map[raw_id] = {
+            "title": title,
+            "url": url,
+            "org": org,
+            "type": "web"
+        }
 
     search_context = "\n\n".join(formatted)
 
+    # --- THAY ĐỔI: prompt dùng raw_id thay vì số ---
     prompt = f"""Dựa vào các kết quả tìm kiếm sau, hãy trả lời câu hỏi bằng tiếng Việt.
-Trích dẫn số thứ tự nguồn [1], [2]... khi dùng thông tin đó.
+Khi trích dẫn, dùng đúng ID trong ngoặc vuông như [web_thuvienphapluat_vn_01].
+Nếu một câu dùng nhiều nguồn, liệt kê tất cả IDs trong cùng 1 ngoặc, phân cách bằng dấu phẩy.
+Ví dụ: [web_thuvienphapluat_vn_01, web_gdt_gov_vn_02]
+KHÔNG tạo ID mới ngoài danh sách trên.
 Ưu tiên thông tin từ các nguồn chính thống (Tổng cục Thuế, Bộ Tài chính).
 
 KẾT QUẢ TÌM KIẾM:
@@ -59,13 +92,5 @@ CÂU HỎI: {query}"""
     llm = get_llm()
     response = llm.invoke([HumanMessage(content=prompt)])
 
-    # Tạo danh sách nguồn để append vào cuối câu trả lời
-    source_list = []
-    for i, r in enumerate(results, 1):
-        title = r.get("title", "Không có tiêu đề")
-        url = r.get("url", "")
-        source_list.append(f"[{i}] {title} — {url}")
-
-    sources_text = "\n".join(source_list)
-
-    return f"{response.content}\n\n---\n**Nguồn tham khảo:**\n{sources_text}"
+    # --- THAY ĐỔI: return tuple thay vì str ---
+    return response.content, citation_map

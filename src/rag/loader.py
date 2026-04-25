@@ -8,6 +8,29 @@ import unicodedata
 from pathlib import Path
 from langchain_core.documents import Document
 import pymupdf4llm
+import re
+
+
+def make_raw_id(source: str, page: int) -> str:
+    """
+    Tạo descriptive raw ID từ tên file + trang.
+    Ví dụ: "hoadon_001.pdf" + 1 → "rag_hoadon_001_p1"
+    Ví dụ: "Báo cáo Q1.pdf" + 1 → "rag_bao_cao_q1_p1"
+    """
+    # Bỏ extension
+    name = Path(source).stem
+
+    # Normalize Unicode → bỏ dấu tiếng Việt
+    name = unicodedata.normalize("NFKD", name)
+    name = name.encode("ascii", "ignore").decode("ascii")
+
+    # Lowercase, thay ký tự đặc biệt bằng underscore
+    name = re.sub(r'[^a-z0-9]', '_', name.lower())
+
+    # Bỏ underscore thừa
+    name = re.sub(r'_+', '_', name).strip('_')
+
+    return f"rag_{name}_p{page}"
 
 
 def normalize_vietnamese(text: str) -> str:
@@ -85,6 +108,7 @@ def load_pdf(file_path: str) -> list[Document]:
                 "source": path.name,
                 "page": page_num,
                 "file_path": str(path),
+                "raw_id":   make_raw_id(path.name, page_num),
             }
         )
         documents.append(doc)
