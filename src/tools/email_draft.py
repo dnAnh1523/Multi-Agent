@@ -40,7 +40,7 @@ def email_draft_tool(query: str, vector_store: Chroma, bm25_retriever=None) -> s
         str: email draft hoàn chỉnh
     """
     # 1. Trích xuất filter từ query
-    my_filter = extract_metadata_filter(query)
+    my_filter = extract_metadata_filter(query, vector_store)
 
     # 2. Truyền filter vào hàm retrieve
     docs = retrieve(vector_store, query, k=3, metadata_filter=my_filter, bm25_retriever=bm25_retriever)

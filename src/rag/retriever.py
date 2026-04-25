@@ -106,25 +106,23 @@ def retrieve(
 ) -> list[Document]:
     """
     Tìm kiếm chunks liên quan đến câu hỏi.
-    Tự động chọn hybrid hoặc semantic tùy vào bm25_retriever.
-
-    Args:
-        vector_store: Chroma instance
-        query: câu hỏi của user
-        k: số chunks muốn lấy
-        metadata_filter: filter theo metadata nếu có
-        bm25_retriever: nếu có → dùng hybrid, không có → fallback semantic
-
-    Returns:
-        list[Document]: chunks liên quan có metadata đầy đủ
+    Tự động chọn hybrid hoặc semantic tùy vào filter.
     """
-    if bm25_retriever is not None:
+    # CHẶN BM25 KHI CÓ FILTER: Chỉ dùng Semantic (Chroma)
+    if metadata_filter is not None:
+        retriever = get_retriever(vector_store, k, metadata_filter)
+        print(f"🔍 Dùng Semantic Retrieval (vì có filter: {metadata_filter})")
+        
+    # NẾU KHÔNG CÓ FILTER: Cho phép chạy Hybrid (BM25 + Semantic) bình thường
+    elif bm25_retriever is not None:
         retriever = get_hybrid_retriever(
-            vector_store, bm25_retriever, k, metadata_filter
+            vector_store, bm25_retriever, k, metadata_filter=None
         )
         print("🔀 Dùng Hybrid Retrieval (BM25 + Semantic)")
+        
+    # FALLBACK Cuối cùng
     else:
-        retriever = get_retriever(vector_store, k, metadata_filter)
+        retriever = get_retriever(vector_store, k, metadata_filter=None)
         print("🔍 Dùng Semantic Retrieval (fallback)")
 
     return retriever.invoke(query)
@@ -167,60 +165,72 @@ def format_context(documents: list[Document]) -> tuple[str, dict]:
 
 
 # -----------------------------------------------
-# METADATA FILTER EXTRACTION
+# METADATA FILTER EXTRACTION (DYNAMIC ENTITY MAPPING)
 # -----------------------------------------------
 
-def clean_doc_id(text: str) -> str:
-    """Chuẩn hóa chuỗi trích xuất từ LLM thành ID dùng để filter."""
-    if not text:
-        return ""
-    numbers = re.findall(r'\d+', text)
-    if numbers:
-        return numbers[0]
-    normalized = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
-    return normalized.lower().replace(" ", "_")
+def get_valid_sources(vector_store: Chroma) -> list[str]:
+    """Tự động quét Vector DB để lấy danh sách tất cả các tên file hiện có."""
+    try:
+        metadatas = vector_store.get()["metadatas"]
+        if metadatas:
+            # Dùng set để loại bỏ các tên file trùng lặp
+            return list(set(m.get("source") for m in metadatas if m.get("source")))
+    except Exception as e:
+        print(f"⚠️ Lỗi khi lấy danh sách source từ Chroma: {e}")
+    return []
 
+def extract_metadata_filter(query: str, vector_store: Chroma) -> dict | None:
+    # 1. Lấy danh sách file thực tế đang có trong DB
+    valid_sources = get_valid_sources(vector_store)
+    if not valid_sources:
+        return None
+    
+    # 2. Tạo chuỗi danh sách để nhét vào prompt
+    sources_str = "\n".join([f"- {s}" for s in valid_sources])
 
-class DocumentFilterParams(BaseModel):
-    doc_id: Optional[str] = Field(
-        description="Mã số hoặc tên tài liệu cần trích xuất (ví dụ: '001', 'báo cáo tài chính').",
-        default=None,
-    )
+    # 3. Định nghĩa Pydantic Model ĐỘNG (nằm ngay trong hàm)
+    class DocumentFilterParams(BaseModel):
+        exact_source: Optional[str] = Field(
+            description=f"""Ánh xạ yêu cầu của người dùng thành tên file chính xác.
+CHỈ ĐƯỢC PHÉP trả về 1 trong các giá trị sau đây:
+{sources_str}
+Nếu người dùng không nhắc đến tài liệu cụ thể nào trong danh sách trên, trả về null.""",
+            default=None,
+        )
 
-
-def extract_metadata_filter(query: str) -> dict | None:
     llm = get_llm()
     structured_llm = llm.with_structured_output(DocumentFilterParams)
     try:
         result = structured_llm.invoke(query)
-        if result and result.doc_id:
-            cleaned_id = clean_doc_id(result.doc_id)
-            if cleaned_id:
-                print(f"🎯 Đã trích xuất doc_id để lọc: {cleaned_id}")
-                return {"source": {"$contains": cleaned_id}}
+        if result and result.exact_source:
+            print(f"🎯 LLM đã map thành công sang source: {result.exact_source}")
+            return {"source": {"$eq": result.exact_source}}
     except Exception as e:
         print(f"⚠️ Lỗi trích xuất filter: {e}")
     return None
 
+def extract_compare_filters(query: str, vector_store: Chroma) -> dict | None:
+    valid_sources = get_valid_sources(vector_store)
+    if not valid_sources:
+        return None
+        
+    sources_str = "\n".join([f"- {s}" for s in valid_sources])
 
-class CompareFilterParams(BaseModel):
-    doc_ids: List[str] = Field(
-        description="Danh sách mã hóa đơn hoặc tên chứng từ (ví dụ: ['001', '002']).",
-        default_factory=list,
-    )
+    class CompareFilterParams(BaseModel):
+        exact_sources: List[str] = Field(
+            description=f"""Danh sách tên các tài liệu cần so sánh.
+CHỈ ĐƯỢC PHÉP chọn từ các giá trị sau:
+{sources_str}
+Trả về danh sách rỗng [] nếu không xác định được tài liệu.""",
+            default_factory=list,
+        )
 
-
-def extract_compare_filters(query: str) -> dict | None:
     llm = get_llm()
     structured_llm = llm.with_structured_output(CompareFilterParams)
     try:
         result = structured_llm.invoke(query)
-        if result and len(result.doc_ids) > 0:
-            filters = []
-            for d_id in result.doc_ids:
-                cleaned_id = clean_doc_id(d_id)
-                if cleaned_id:
-                    filters.append({"source": {"$contains": cleaned_id}})
+        if result and len(result.exact_sources) > 0:
+            filters = [{"source": {"$eq": src}} for src in result.exact_sources]
             if len(filters) >= 2:
                 return {"$or": filters}
             elif len(filters) == 1:

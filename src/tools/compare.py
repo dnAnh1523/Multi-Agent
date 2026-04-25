@@ -34,7 +34,7 @@ NỘI DUNG TÀI LIỆU:
 
 
 def compare_tool(query: str, vector_store: Chroma, bm25_retriever=None) -> str:
-    multi_filter = extract_compare_filters(query)
+    multi_filter = extract_compare_filters(query, vector_store)
     
     # Kéo k=6 chunk để đảm bảo đủ dữ liệu từ 2 file
     docs = retrieve(vector_store, query, k=6, metadata_filter=multi_filter, bm25_retriever=bm25_retriever)
