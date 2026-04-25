@@ -6,11 +6,14 @@ Accounting & Invoice Agent - Multi-Agent RAG System
 import chainlit as cl
 from pathlib import Path
 import re
+import uuid
 
 from src.rag.loader import load_pdfs
 from src.rag.embedder import build_vector_store, get_embedding_model, get_vector_store, add_documents
 from src.agents.graph import build_graph, chat
 from src.config import validate_config, LANGGRAPH_THREAD_ID
+from src.rag.retriever import build_bm25_retriever
+
 
 # --- Đường dẫn PDF mẫu mặc định ---
 DEFAULT_PDFS = [
@@ -40,16 +43,18 @@ async def on_chat_start():
     docs = load_pdfs(DEFAULT_PDFS)
 
     # Build vector store
-    vector_store = build_vector_store(docs)
-
-    # Build graph
-    graph = build_graph(vector_store)
+    vector_store, documents = build_vector_store(docs)
+    bm25_retriever = build_bm25_retriever(documents)
+    graph = build_graph(vector_store, bm25_retriever)
+    cl.user_session.set("bm25_retriever", bm25_retriever)
 
     # Lưu vào user_session để dùng ở on_message
     # cl.user_session.set() nhận key và value
     cl.user_session.set("graph", graph)
     cl.user_session.set("vector_store", vector_store)
-    cl.user_session.set("thread_id", LANGGRAPH_THREAD_ID)
+    session_thread_id = str(uuid.uuid4())
+    cl.user_session.set("documents", documents)
+    cl.user_session.set("thread_id", session_thread_id)
 
     # Cập nhật thông báo thành công
     msg.content = """✅ Hệ thống đã sẵn sàng!
@@ -65,51 +70,43 @@ async def on_chat_start():
     await msg.update()
 
 def process_citations(answer: str, citation_map: dict) -> tuple[str, list[str]]:
-    """
-    Post-process câu trả lời của LLM:
-    1. Tìm tất cả raw IDs xuất hiện trong answer
-    2. Sort theo alphabet → thứ tự danh sách tham khảo IEEE
-    3. Map raw_id → số IEEE [1],[2],...
-    4. Thay thế trong text
-    5. Tạo danh sách tham khảo IEEE
-
-    Returns:
-        tuple: (processed_answer, references_list)
-    """
-    # Tìm tất cả ngoặc vuông trong answer
+    # Pass 1: collect tất cả valid IDs
     bracket_groups = re.findall(r'\[([^\]]+)\]', answer)
-
-    # Extract tất cả raw IDs hợp lệ
     found_ids = []
     for group in bracket_groups:
-        ids = [id.strip() for id in group.split(',')]
-        for id in ids:
+        for id in [i.strip() for i in group.split(',')]:
             if re.match(r'^(rag|web)_[a-z0-9_]+$', id) and id in citation_map:
-                found_ids.append(id)
+                if id not in found_ids:
+                    found_ids.append(id)
 
     if not found_ids:
-        return answer, []
+        # Xóa các ngoặc rác không hợp lệ
+        processed = answer
+        for group in set(bracket_groups):
+            ids = [i.strip() for i in group.split(',')]
+            if not any(i in citation_map for i in ids):
+                processed = processed.replace(f'[{group}]', '')
+        return processed, []
 
-    # Sort theo alphabet → thứ tự danh sách tham khảo
+    # Pass 2: sort và map số IEEE
     sorted_ids = sorted(set(found_ids))
-
-    # Map raw_id → số IEEE
     id_to_number = {id: i + 1 for i, id in enumerate(sorted_ids)}
 
-    # Thay thế trong text — xử lý cả single và multiple IDs
+    # Pass 3: replace trong text
     processed = answer
-    for group in set(re.findall(r'\[([^\]]+)\]', answer)):
-        ids_in_group = [id.strip() for id in group.split(',')]
-        valid_ids = [id for id in ids_in_group
-                     if re.match(r'^(rag|web)_[a-z0-9_]+$', id)
-                     and id in citation_map]
+    for group in set(bracket_groups):
+        ids_in_group = [i.strip() for i in group.split(',')]
+        valid_ids = [i for i in ids_in_group
+                     if re.match(r'^(rag|web)_[a-z0-9_]+$', i)
+                     and i in citation_map]
         if valid_ids:
-            # Thay bằng số IEEE, sort theo số
-            numbers = sorted([id_to_number[id] for id in valid_ids])
+            numbers = sorted([id_to_number[i] for i in valid_ids])
             new_ref = " ".join([f"[{n}]" for n in numbers])
             processed = processed.replace(f'[{group}]', new_ref)
+        else:
+            processed = processed.replace(f'[{group}]', '')
 
-    # Tạo danh sách tham khảo IEEE
+    # Pass 4: tạo danh sách tham khảo IEEE
     references = []
     for raw_id in sorted_ids:
         num = id_to_number[raw_id]
@@ -122,6 +119,7 @@ def process_citations(answer: str, citation_map: dict) -> tuple[str, list[str]]:
         references.append(ref)
 
     return processed, references
+
 
 @cl.on_message
 async def on_message(message: cl.Message):
@@ -153,7 +151,13 @@ async def on_message(message: cl.Message):
 
             # Add vào vector store hiện tại
             count = add_documents(vector_store, new_docs)
-
+            existing_docs = cl.user_session.get("documents", [])
+            updated_docs = existing_docs + new_docs
+            cl.user_session.set("documents", updated_docs)
+            bm25_retriever = build_bm25_retriever(updated_docs)
+            cl.user_session.set("bm25_retriever", bm25_retriever)
+            graph = build_graph(vector_store, bm25_retriever)
+            cl.user_session.set("graph", graph)
             processing_msg.content = f"✅ Đã index {count} trang từ {len(pdf_files)} file vào hệ thống!"
             await processing_msg.update()
 

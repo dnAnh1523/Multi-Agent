@@ -25,7 +25,6 @@ class AgentState(TypedDict):
     context:     list[str]
     citation_map: dict
     tool_output: str
-    steps:       int
 
 
 # -----------------------------------------------
@@ -46,7 +45,7 @@ def route_after_planner(state: AgentState) -> str:
 # -----------------------------------------------
 # 3. Build graph
 # -----------------------------------------------
-def build_graph(vector_store: Chroma):
+def build_graph(vector_store: Chroma, bm25_retriever=None):
     """
     Tạo và compile StateGraph với:
     - Node "planner": phân tích intent
@@ -55,11 +54,11 @@ def build_graph(vector_store: Chroma):
 
     Args:
         vector_store: Chroma instance đã có documents
-
+        bm25_retriever: BM25Retriever instance (tùy chọn)
     Returns:
         CompiledGraph: graph đã compile, sẵn sàng để invoke
     """
-    executor_node = make_executor(vector_store)
+    executor_node = make_executor(vector_store, bm25_retriever)
 
     builder = StateGraph(AgentState)
 

@@ -5,7 +5,7 @@ email_draft.py - Tool soạn email chuyên nghiệp liên quan đến hóa đơn
 from langchain_chroma import Chroma
 from langchain_core.messages import HumanMessage
 from src.rag.retriever import retrieve, format_context, extract_metadata_filter
-from src.agents.planner import get_llm
+from src.utils.llm import get_llm
 
 EMAIL_DRAFT_PROMPT = """Bạn là chuyên gia kế toán Việt Nam, soạn email chuyên nghiệp.
 Dựa vào thông tin hóa đơn dưới đây và yêu cầu của người dùng, hãy soạn một email hoàn chỉnh.
@@ -28,8 +28,7 @@ THÔNG TIN HÓA ĐƠN:
 {context}
 """
 
-
-def email_draft_tool(query: str, vector_store: Chroma) -> str:
+def email_draft_tool(query: str, vector_store: Chroma, bm25_retriever=None) -> str:
     """
     Soạn email chuyên nghiệp dựa trên thông tin hóa đơn.
 
@@ -43,13 +42,19 @@ def email_draft_tool(query: str, vector_store: Chroma) -> str:
     # 1. Trích xuất filter từ query
     my_filter = extract_metadata_filter(query)
 
-    # 2. Truyền filter vào hàm retrieve (đã được bạn nâng cấp ở phần trước)
-    docs = retrieve(vector_store, query, k=3, metadata_filter=my_filter)
+    # 2. Truyền filter vào hàm retrieve
+    docs = retrieve(vector_store, query, k=3, metadata_filter=my_filter, bm25_retriever=bm25_retriever)
+
+    # 3. CƠ CHẾ FALLBACK: Nếu filter quá khắt khe, thử tìm lại không dùng filter
+    if not docs and my_filter:
+        print("⚠️ Filter quá chặt không tìm thấy tài liệu, đang tìm lại không dùng filter...")
+        docs = retrieve(vector_store, query, k=3, metadata_filter=None, bm25_retriever=bm25_retriever)
 
     if not docs:
-        return "❌ Không tìm thấy thông tin hóa đơn để soạn email."
+        return "❌ Không tìm thấy thông tin hóa đơn để soạn email. Hãy chắc chắn bạn đã cung cấp mã hoặc tên tài liệu hợp lệ."
 
-    context = format_context(docs)
+    # Sửa lỗi Unpack Tuple: format_context trả về 2 biến (string, dict)
+    context, _ = format_context(docs)
     prompt = EMAIL_DRAFT_PROMPT.format(query=query, context=context)
 
     llm = get_llm()

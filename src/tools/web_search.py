@@ -5,7 +5,7 @@ Dùng Tavily Search API để tìm thông tin real-time từ các nguồn đáng
 
 from langchain_tavily import TavilySearch
 from langchain_core.messages import HumanMessage
-from src.agents.planner import get_llm
+from src.utils.llm import get_llm
 from src.config import TAVILY_API_KEY
 from urllib.parse import urlparse
 import re
@@ -28,29 +28,27 @@ DOMAIN_MAP = {
 }
 
 def web_search_tool(query: str) -> tuple[str, dict]:
-    """
-    Tìm kiếm thông tin luật thuế, chính sách kế toán mới nhất.
-
-    Returns:
-        tuple: (answer_str, citation_map)
-    """
     if not TAVILY_API_KEY:
-        return "❌ Chưa cấu hình TAVILY_API_KEY.", {}
+        return "❌ Chưa cấu hình TAVILY_API_KEY. Tính năng tìm kiếm web bị vô hiệu hóa.", {}
 
     search = TavilySearch(
         max_results=5,
         topic="general",
-        include_domains=["tongcucthuế.gov.vn", "thuvienphapluat.vn",
-                         "mof.gov.vn", "gdt.gov.vn"]
+        include_domains=["tongcucthuế.gov.vn", "thuvienphapluat.vn", "mof.gov.vn", "gdt.gov.vn"]
     )
 
-    raw_results = search.invoke({"query": query})
+    # SỬA LỖI: Try-Except bắt lỗi gọi API
+    try:
+        raw_results = search.invoke({"query": query})
+    except Exception as e:
+        print(f"⚠️ Lỗi Tavily API: {e}")
+        return "❌ Đã có lỗi xảy ra khi gọi dịch vụ tìm kiếm web (Tavily). Vui lòng thử lại sau.", {}
+
     results = raw_results.get("results", [])
 
     if not results:
         return "❌ Không tìm thấy thông tin liên quan trên web.", {}
 
-    # --- THAY ĐỔI: dùng raw_id thay vì [1],[2] ---
     citation_map = {}
     formatted = []
 
@@ -63,26 +61,17 @@ def web_search_tool(query: str) -> tuple[str, dict]:
         domain = urlparse(url).netloc.replace("www.", "")
         org = DOMAIN_MAP.get(domain, domain)
 
-        # Format context với raw_id làm label
         formatted.append(f"[{raw_id}] {title}\nNguồn: {url}\n{content}")
-
-        # Build citation_map
-        citation_map[raw_id] = {
-            "title": title,
-            "url": url,
-            "org": org,
-            "type": "web"
-        }
+        citation_map[raw_id] = {"title": title, "url": url, "org": org, "type": "web"}
 
     search_context = "\n\n".join(formatted)
 
-    # --- THAY ĐỔI: prompt dùng raw_id thay vì số ---
     prompt = f"""Dựa vào các kết quả tìm kiếm sau, hãy trả lời câu hỏi bằng tiếng Việt.
 Khi trích dẫn, dùng đúng ID trong ngoặc vuông như [web_thuvienphapluat_vn_01].
 Nếu một câu dùng nhiều nguồn, liệt kê tất cả IDs trong cùng 1 ngoặc, phân cách bằng dấu phẩy.
 Ví dụ: [web_thuvienphapluat_vn_01, web_gdt_gov_vn_02]
 KHÔNG tạo ID mới ngoài danh sách trên.
-Ưu tiên thông tin từ các nguồn chính thống (Tổng cục Thuế, Bộ Tài chính).
+Ưu tiên thông tin từ các nguồn chính thống.
 
 KẾT QUẢ TÌM KIẾM:
 {search_context}
@@ -92,5 +81,4 @@ CÂU HỎI: {query}"""
     llm = get_llm()
     response = llm.invoke([HumanMessage(content=prompt)])
 
-    # --- THAY ĐỔI: return tuple thay vì str ---
     return response.content, citation_map

@@ -69,23 +69,26 @@ def add_documents(vector_store: Chroma, documents: list[Document]) -> int:
     return len(documents)
 
 
-def build_vector_store(documents: list[Document]) -> Chroma:
+def build_vector_store(documents: list[Document]) -> tuple[Chroma, list[Document]]:
     """
-    Hàm tổng hợp: tạo embedding model + vector store + add documents.
-    Đây là hàm chính sẽ được gọi từ app.py khi user upload PDF.
-    
-    Args:
-        documents: list Documents từ loader
-        
     Returns:
-        Chroma: vector store đã được index
+        tuple: (vector_store, documents) — documents dùng để build BM25
     """
     print(f"🔧 Khởi tạo embedding model: {EMBEDDING_MODEL}")
-
     embedding = get_embedding_model()
-    print(f"🗄️ Kết nối vector store (mode: {CHROMA_MODE})")
-    
-    vector_store = get_vector_store(embedding)
-    add_documents(vector_store, documents)
 
-    return vector_store
+    print(f"🗄️ Kết nối vector store (mode: {CHROMA_MODE})")
+    vector_store = get_vector_store(embedding)
+
+    try:
+        if vector_store._collection.count() == 0:
+            print("📦 Vector DB trống, tiến hành index dữ liệu mẫu...")
+            add_documents(vector_store, documents)
+        else:
+            print(f"⚡ Vector DB đã có {vector_store._collection.count()} chunks.")
+    except Exception as e:
+        print(f"⚠️ Lỗi khi check DB: {e}")
+        add_documents(vector_store, documents)
+
+    # Return cả vector_store lẫn documents để build BM25
+    return vector_store, documents

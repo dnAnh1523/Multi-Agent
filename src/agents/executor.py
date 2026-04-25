@@ -5,9 +5,8 @@ Thực thi action dựa trên intent từ Planner.
 
 from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
 from langchain_chroma import Chroma
-from src.agents.planner import get_llm
+from src.utils.llm import get_llm
 from src.rag.retriever import retrieve, format_context
-from src.config import FAITHFULNESS_THRESHOLD
 
 EXECUTOR_SYSTEM_PROMPT = """Bạn là trợ lý kế toán thông minh cho doanh nghiệp Việt Nam.
 Trả lời bằng tiếng Việt, chính xác, dựa trên context được cung cấp.
@@ -15,7 +14,7 @@ Nếu không tìm thấy thông tin trong context, hãy nói rõ thay vì đoán
 Luôn trích dẫn nguồn tài liệu khi trả lời."""
 
 
-def make_executor(vector_store: Chroma):
+def make_executor(vector_store: Chroma, bm25_retriever=None):
     """
     Factory function tạo executor_node với vector_store đã được bind.
     Dùng closure để truyền vector_store vào node mà không vi phạm
@@ -44,6 +43,7 @@ def make_executor(vector_store: Chroma):
             return {
                 "messages": [AIMessage(content=answer)],
                 "tool_output": answer,
+                "citation_map": {} # 👈 Thêm dòng này để dọn dẹp state cũ
             }
 
         elif intent == "general":
@@ -52,10 +52,13 @@ def make_executor(vector_store: Chroma):
                 SystemMessage(content=EXECUTOR_SYSTEM_PROMPT),
                 HumanMessage(content=last_message)
             ])
-            return {"messages": [AIMessage(content=response.content)]}
+            return {
+                "messages": [AIMessage(content=response.content)],
+                "citation_map": {} # 👈 Thêm dòng này để dọn dẹp state cũ
+            }
 
         elif intent == "retrieve":
-            docs = retrieve(vector_store, last_message, k=5)
+            docs = retrieve(vector_store, last_message, k=5, bm25_retriever=bm25_retriever)
             context, citation_map = format_context(docs)
 
             # Tạo prompt riêng — không bị ảnh hưởng bởi indent
@@ -85,18 +88,20 @@ def make_executor(vector_store: Chroma):
 
         elif intent == "invoice_summary":
             from src.tools.invoice_summary import invoice_summary_tool
-            result = invoice_summary_tool(last_message, vector_store)
+            result = invoice_summary_tool(last_message, vector_store, bm25_retriever)
             return {
                 "messages": [AIMessage(content=result)], 
-                "tool_output": result
+                "tool_output": result,
+                "citation_map": {} # 👈 Thêm dòng này để dọn dẹp state cũ
             }
 
         elif intent == "email_draft":
             from src.tools.email_draft import email_draft_tool
-            result = email_draft_tool(last_message, vector_store)
+            result = email_draft_tool(last_message, vector_store, bm25_retriever)
             return {
                 "messages": [AIMessage(content=result)], 
-                "tool_output": result
+                "tool_output": result,
+                "citation_map": {} # 👈 Thêm dòng này để dọn dẹp state cũ
             }
 
         elif intent == "web_search":
@@ -110,10 +115,11 @@ def make_executor(vector_store: Chroma):
 
         elif intent == "compare":
             from src.tools.compare import compare_tool
-            result = compare_tool(last_message, vector_store)
+            result = compare_tool(last_message, vector_store, bm25_retriever)
             return {
                 "messages": [AIMessage(content=result)],
-                "tool_output": result
+                "tool_output": result,
+                "citation_map": {} # 👈 Thêm dòng này để dọn dẹp state cũ
             }
 
         # Fallback nếu intent không khớp case nào

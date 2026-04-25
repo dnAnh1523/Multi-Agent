@@ -6,7 +6,7 @@ Trích xuất các trường quan trọng từ hóa đơn và trả về dạng 
 from langchain_chroma import Chroma
 from langchain_core.messages import HumanMessage
 from src.rag.retriever import retrieve, format_context, extract_metadata_filter
-from src.agents.planner import get_llm
+from src.utils.llm import get_llm
 
 INVOICE_SUMMARY_PROMPT = """Bạn là chuyên gia kế toán Việt Nam. 
 Dựa vào nội dung hóa đơn dưới đây, hãy trích xuất và trình bày các thông tin sau dạng bảng Markdown:
@@ -33,8 +33,7 @@ NỘI DUNG HÓA ĐƠN:
 {context}
 """
 
-
-def invoice_summary_tool(query: str, vector_store: Chroma) -> str:
+def invoice_summary_tool(query: str, vector_store: Chroma, bm25_retriever=None) -> str:
     """
     Tóm tắt chi tiết một hóa đơn từ vector store.
     
@@ -48,13 +47,19 @@ def invoice_summary_tool(query: str, vector_store: Chroma) -> str:
     # 1. Trích xuất filter từ query
     my_filter = extract_metadata_filter(query)
 
-    # 2. Truyền filter vào hàm retrieve (đã được bạn nâng cấp ở phần trước)
-    docs = retrieve(vector_store, query, k=3, metadata_filter=my_filter)
+    # 2. Truyền filter vào hàm retrieve
+    docs = retrieve(vector_store, query, k=3, metadata_filter=my_filter, bm25_retriever=bm25_retriever)
+
+    # 3. CƠ CHẾ FALLBACK: Nếu filter quá khắt khe, thử tìm lại không dùng filter
+    if not docs and my_filter:
+        print("⚠️ Filter quá chặt không tìm thấy tài liệu, đang tìm lại không dùng filter...")
+        docs = retrieve(vector_store, query, k=3, metadata_filter=None, bm25_retriever=bm25_retriever)
 
     if not docs:
-        return "❌ Không tìm thấy hóa đơn phù hợp trong tài liệu đã upload."
+        return "❌ Không tìm thấy hóa đơn phù hợp trong tài liệu đã upload. Hãy chắc chắn bạn đã cung cấp mã hoặc tên tài liệu hợp lệ."
     
-    context = format_context(docs)
+    # Sửa lỗi Unpack Tuple: format_context trả về 2 biến (string, dict)
+    context, _ = format_context(docs)
     prompt = INVOICE_SUMMARY_PROMPT.format(context=context)
 
     llm = get_llm()
