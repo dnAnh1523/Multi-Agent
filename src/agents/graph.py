@@ -22,9 +22,11 @@ from src.config import LANGGRAPH_THREAD_ID
 class AgentState(TypedDict):
     messages:    Annotated[list[BaseMessage], add_messages]
     intent:      str
+    resolved_query: str
     context:     list[str]
     citation_map: dict
     tool_output: str
+    working_memory: dict
 
 
 # -----------------------------------------------

@@ -9,18 +9,47 @@ import re
 import uuid
 
 from src.rag.loader import load_pdfs
-from src.rag.embedder import build_vector_store, get_embedding_model, get_vector_store, add_documents
+from src.rag.embedder import build_vector_store, add_documents
 from src.agents.graph import build_graph, chat
-from src.config import validate_config, LANGGRAPH_THREAD_ID
+from src.config import validate_config
 from src.rag.retriever import build_bm25_retriever
 
 
 # --- Đường dẫn PDF mẫu mặc định ---
 DEFAULT_PDFS = [
+    # Hóa đơn gốc (3 hóa đơn ban đầu)
     "data/sample_invoices/hoadon_001.pdf",
     "data/sample_invoices/hoadon_002.pdf",
     "data/sample_invoices/hoadon_003.pdf",
+    # Báo cáo tài chính
     "data/sample_invoices/bao_cao_tai_chinh_q1.pdf",
+    "data/sample_invoices/bao_cao_tai_chinh_q2.pdf",
+    # Hóa đơn đầu vào (mua hàng)
+    "data/sample_invoices/hoadon_004.pdf",
+    "data/sample_invoices/hoadon_005.pdf",
+    "data/sample_invoices/hoadon_006.pdf",
+    "data/sample_invoices/hoadon_007.pdf",
+    "data/sample_invoices/hoadon_008.pdf",
+    "data/sample_invoices/hoadon_009.pdf",
+    "data/sample_invoices/hoadon_010.pdf",
+    "data/sample_invoices/hoadon_011.pdf",
+    "data/sample_invoices/hoadon_012.pdf",
+    "data/sample_invoices/hoadon_013.pdf",
+    # Hóa đơn đầu ra (bán hàng)
+    "data/sample_invoices/hoadon_014.pdf",
+    "data/sample_invoices/hoadon_015.pdf",
+    "data/sample_invoices/hoadon_016.pdf",
+    "data/sample_invoices/hoadon_017.pdf",
+    "data/sample_invoices/hoadon_018.pdf",
+    "data/sample_invoices/hoadon_019.pdf",
+    "data/sample_invoices/hoadon_020.pdf",
+    # Edge cases
+    "data/sample_invoices/hoadon_021.pdf",
+    "data/sample_invoices/hoadon_022.pdf",
+    "data/sample_invoices/hoadon_023.pdf",
+    "data/sample_invoices/hoadon_024.pdf",
+    # Văn bản pháp luật thuế
+    "data/tax_documents/78_2021_TT-BTC_477966.pdf",
 ]
 
 

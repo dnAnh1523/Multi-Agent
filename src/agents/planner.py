@@ -30,28 +30,60 @@ Ví dụ:
 """
 
 def planner_node(state: dict) -> dict:
-    # ❌ XÓA BỎ HOÀN TOÀN đoạn check MAX_AGENT_ITERATIONS
-    # current_steps = state.get("steps", 0) ...
-    
     messages = state.get("messages", [])
+    working_memory = state.get("working_memory", {})
+
     if not messages:
-        return {"intent": "general"}
-    
+        return {"intent": "general", "resolved_query": "", "working_memory": working_memory}
+
     last_message = messages[-1].content.strip()
     if not last_message:
-        return {"intent": "general"}
+        return {"intent": "general", "resolved_query": "", "working_memory": working_memory}
 
     llm = get_llm()
+
+    # --- Bước 1: Query Rewriting dùng working_memory ---
+    # working_memory compact hơn raw history, ít token hơn
+    if working_memory:
+        memory_context = "\n".join([
+            f"- {k}: {v}" for k, v in working_memory.items()
+        ])
+        rewrite_lines = [
+            "Dựa vào ngữ cảnh làm việc hiện tại dưới đây,",
+            "hãy viết lại câu hỏi thành câu độc lập, đầy đủ thông tin,",
+            "không dùng đại từ như 'đó', 'này', 'trên', 'hóa đơn đó'...",
+            "Nếu câu hỏi đã rõ ràng và không liên quan đến ngữ cảnh, giữ nguyên.",
+            "Chỉ trả về câu hỏi đã viết lại, không giải thích.",
+            "",
+            "NGỮ CẢNH HIỆN TẠI:",
+            memory_context,
+            "",
+            f"CÂU HỎI: {last_message}",
+            "CÂU HỎI ĐÃ VIẾT LẠI:",
+        ]
+        rewritten = llm.invoke([HumanMessage(content="\n".join(rewrite_lines))])
+        resolved_query = rewritten.content.strip()
+        print(f"🔄 Query rewritten: {resolved_query}")
+    else:
+        resolved_query = last_message
+
+    # --- Bước 2: Phân tích intent ---
     response = llm.invoke([
         SystemMessage(content=PLANNER_SYSTEM_PROMPT),
-        HumanMessage(content=last_message)
+        HumanMessage(content=resolved_query),
     ])
 
     intent = response.content.strip().lower()
-    valid_intents = {"retrieve", "invoice_summary", "email_draft", "web_search", "compare", "general", "stop"}
-    
+    valid_intents = {
+        "retrieve", "invoice_summary", "email_draft",
+        "web_search", "compare", "general", "stop"
+    }
     if intent not in valid_intents:
         intent = "retrieve"
 
     print(f"🎯 Planner quyết định: {intent}")
-    return {"intent": intent} # 👈 Không trả về steps nữa
+    return {
+        "intent": intent,
+        "resolved_query": resolved_query,
+        "working_memory": working_memory,
+    }
